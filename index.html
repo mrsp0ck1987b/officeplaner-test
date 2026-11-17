@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Officeplaner Test</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1C2838">
+<style>
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: #F3F5F8; color: #1F2933; }
+  header { background: #1C2838; color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header img { width: 32px; height: 32px; border-radius: 8px; }
+  header h1 { margin: 0; font-size: 18px; }
+  main { max-width: 980px; margin: 20px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 16px; }
+  section { background: #fff; border: 1px solid #E1E6EC; border-radius: 12px; padding: 16px 20px; }
+  h2 { margin: 0 0 10px; font-size: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #EEF1F5; }
+  th { color: #52606D; font-size: 13px; background: #F6F8FB; }
+  td.s { width: 110px; font-weight: 700; }
+  .ok { color: #1E6B34; } .fehler { color: #A3261B; } .offen { color: #8A5300; }
+  button { min-height: 38px; padding: 0 14px; border: 1px solid #B8C2CF; border-radius: 8px; background: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.primary { background: #2F6FDE; border-color: #2F6FDE; color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text] { min-height: 36px; padding: 0 10px; border: 1px solid #B8C2CF; border-radius: 8px; font: inherit; font-size: 14px; min-width: 280px; }
+  ul { margin: 8px 0 0; padding-left: 20px; font-size: 14px; }
+  .hint { font-size: 13px; color: #52606D; }
+</style>
+</head>
+<body>
+<header><img src="icon-192.png" alt=""><h1>Officeplaner Test – installierbare Web-App</h1></header>
+<main>
+  <section>
+    <h2>1. App installieren</h2>
+    <div class="row">
+      <button class="primary" id="install" disabled>Als App installieren</button>
+      <span class="hint" id="installInfo">Prüfe, ob die Installation angeboten wird …</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Lokale Einträge (bleiben nur auf diesem PC)</h2>
+    <div class="row">
+      <label for="eintrag">Eintrag</label>
+      <input type="text" id="eintrag" placeholder="z. B. Mo 23.11. Office">
+      <button id="speichern">Speichern</button>
+      <button id="loeschen">Alle löschen</button>
+    </div>
+    <ul id="liste"></ul>
+    <p class="hint">Diese Einträge werden nur im Browser dieses Rechners gespeichert (IndexedDB). Sie werden nicht zu GitHub oder an andere Personen übertragen. Öffnet ein Kollege dieselbe Adresse, sieht er seine eigene, leere Liste.</p>
+  </section>
+
+  <section>
+    <h2>3. Technische Prüfung</h2>
+    <table aria-label="Testergebnisse"><thead><tr><th>Test</th><th>Status</th><th>Details</th></tr></thead><tbody id="tests"></tbody></table>
+    <div class="row" style="margin-top: 12px">
+      <button class="primary" id="copy">Ergebnis kopieren</button>
+      <span class="hint" id="copyInfo"></span>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var defs = [
+    ['p1', '1 Sichere Adresse (https)'],
+    ['p2', '2 Offline-Funktion (Service Worker)'],
+    ['p3', '3 Installation wird angeboten'],
+    ['p4', '4 Läuft als installierte App'],
+    ['p5', '5 Lokale Datenbank (IndexedDB)'],
+    ['p6', '6 Dauerhafter Speicher'],
+    ['p7', '7 Offline nutzbar']
+  ];
+  var res = {};
+  var tb = document.getElementById('tests');
+  defs.forEach(function (d) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td class="s offen" id="' + d[0] + 's">offen</td><td id="' + d[0] + 'd"></td>';
+    tr.firstChild.textContent = d[1];
+    tb.appendChild(tr);
+  });
+  function set(id, st, det) {
+    var s = document.getElementById(id + 's');
+    s.textContent = st; s.className = 's ' + (st === 'OK' ? 'ok' : (st === 'Fehler' ? 'fehler' : 'offen'));
+    document.getElementById(id + 'd').textContent = det;
+    res[id] = st + ' – ' + det;
+  }
+
+  // 1
+  set('p1', window.isSecureContext ? 'OK' : 'Fehler', location.protocol + '//' + location.host + (window.isSecureContext ? ' (sicher)' : ' (nicht sicher – PWA nicht möglich)'));
+
+  // 2 + 7
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      set('p2', 'OK', 'registriert (Bereich ' + reg.scope + ')');
+      return navigator.serviceWorker.ready;
+    }).then(function () {
+      return caches.keys();
+    }).then(function (keys) {
+      set('p7', keys.length ? 'OK' : 'offen', keys.length ? 'Programmdateien zwischengespeichert. Prüfen: WLAN/LAN trennen und App neu öffnen.' : 'noch nicht zwischengespeichert – Seite einmal neu laden');
+    }).catch(function (e) { set('p2', 'Fehler', String(e)); set('p7', 'Fehler', 'ohne Service Worker nicht möglich'); });
+  } else {
+    set('p2', 'Fehler', 'Service Worker nicht verfügbar');
+    set('p7', 'Fehler', 'ohne Service Worker nicht möglich');
+  }
+
+  // 3 + Installieren
+  var deferred = null;
+  var btn = document.getElementById('install');
+  var info = document.getElementById('installInfo');
+  var standalone = window.matchMedia('(display-mode: standalone)').matches;
+  if (standalone) {
+    set('p3', 'OK', 'bereits installiert');
+    set('p4', 'OK', 'eigenes App-Fenster (standalone)');
+    info.textContent = 'Die App ist installiert und läuft im eigenen Fenster.';
+  } else {
+    set('p4', 'offen', 'läuft im Browser-Tab; nach dem Installieren aus dem App-Fenster erneut prüfen');
+    set('p3', 'offen', 'wartet auf Angebot des Browsers (kann einige Sekunden dauern)');
+    setTimeout(function () {
+      if (!deferred && !standalone) {
+        set('p3', 'offen', 'kein Angebot erhalten. Alternativ: Edge-Menü (…) → Apps → „Diese Website als App installieren“');
+        info.textContent = 'Kein automatisches Angebot. Alternativ über das Edge-Menü (…) → Apps installieren.';
+      }
+    }, 8000);
+  }
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault(); deferred = e;
+    btn.disabled = false;
+    info.textContent = 'Installation möglich – Schaltfläche anklicken.';
+    set('p3', 'OK', 'Browser bietet die Installation an');
+  });
+  btn.addEventListener('click', function () {
+    if (!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.then(function (c) {
+      info.textContent = c.outcome === 'accepted' ? 'Installiert – die App öffnet sich in einem eigenen Fenster.' : 'Installation abgebrochen.';
+      deferred = null; btn.disabled = true;
+    });
+  });
+  window.addEventListener('appinstalled', function () { set('p3', 'OK', 'App wurde installiert'); });
+
+  // 5 + Einträge
+  var db = null;
+  var req = indexedDB.open('officeplaner_test', 1);
+  req.onupgradeneeded = function () { req.result.createObjectStore('eintraege', { autoIncrement: true }); };
+  req.onsuccess = function () { db = req.result; set('p5', 'OK', 'Datenbank geöffnet'); liste(); };
+  req.onerror = function () { set('p5', 'Fehler', String(req.error)); };
+  function liste() {
+    var ul = document.getElementById('liste'); ul.innerHTML = '';
+    var tx = db.transaction('eintraege', 'readonly');
+    var cur = tx.objectStore('eintraege').openCursor();
+    var n = 0;
+    cur.onsuccess = function () {
+      var c = cur.result;
+      if (c) { var li = document.createElement('li'); li.textContent = c.value.text + ' (gespeichert ' + c.value.zeit + ')'; ul.appendChild(li); n++; c.continue(); }
+      else if (n === 0) { var li2 = document.createElement('li'); li2.textContent = 'Noch keine Einträge auf diesem PC.'; ul.appendChild(li2); }
+    };
+  }
+  document.getElementById('speichern').addEventListener('click', function () {
+    var inp = document.getElementById('eintrag');
+    var t = inp.value.trim(); if (!t || !db) return;
+    var tx = db.transaction('eintraege', 'readwrite');
+    tx.objectStore('eintraege').add({ text: t, zeit: new Date().toLocaleString('de-DE') });
+    tx.oncomplete = function () { inp.value = ''; liste(); };
+  });
+  document.getElementById('loeschen').addEventListener('click', function () {
+    if (!db) return;
+    var tx = db.transaction('eintraege', 'readwrite');
+    tx.objectStore('eintraege').clear();
+    tx.oncomplete = liste;
+  });
+
+  // 6
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persisted().then(function (p) {
+      if (p) { set('p6', 'OK', 'Speicher ist bereits dauerhaft'); return; }
+      return navigator.storage.persist().then(function (g) {
+        set('p6', g ? 'OK' : 'Hinweis', g ? 'dauerhafter Speicher gewährt' : 'nicht gewährt (Browser kann Daten bei Platzmangel löschen; nach Installation erneut prüfen)');
+      });
+    }).catch(function (e) { set('p6', 'Fehler', String(e)); });
+  } else { set('p6', 'Hinweis', 'Funktion nicht verfügbar'); }
+
+  // Kopieren
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = 'Officeplaner PWA-Test (' + (standalone ? 'App-Fenster' : 'Browser-Tab') + ')\r\n' + defs.map(function (d) { return d[1] + ': ' + (res[d[0]] || 'offen'); }).join('\r\n');
+    navigator.clipboard.writeText(text).then(function () { document.getElementById('copyInfo').textContent = 'Kopiert – bitte in den Chat einfügen.'; })
+      .catch(function () { document.getElementById('copyInfo').textContent = 'Kopieren nicht möglich – bitte Bildschirmfoto senden.'; });
+  });
+})();
+</script>
+</body>
+</html>
